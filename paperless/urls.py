@@ -12,4 +12,7 @@ urlpatterns = [
     path('delete-user', views.delete_user),
     path('update-user', views.update_user),
     path('create-user', views.create_user),
+
+    path('user', views.userAPI.as_view()),
+    path('facture', views.factureAPI.as_view()),
 ]

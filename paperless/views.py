@@ -1,6 +1,27 @@
 from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest
+from django.views import View
 
 from .models import Facture, User
+
+class userAPI(View):
+    def get(self, request):
+        pass 
+    def post(self, request):
+        pass
+    def put(self, request):
+        pass
+    def delete(self,request):
+        pass
+
+class factureAPI(View):
+    def get(self, request):
+        pass 
+    def post(self, request):
+        pass
+    def put(self, request):
+        pass
+    def delete(self,request):
+        pass
 
 def get_factures_with_siret(request : HttpRequest):
     siret = request.GET.get("siret",None)

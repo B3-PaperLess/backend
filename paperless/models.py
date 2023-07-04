@@ -4,8 +4,8 @@ from django.db import models
 
 class User(models.Model):
     siret = models.BigIntegerField(primary_key=True)
-    nom = models.CharField(max_length=128)
-    password = models.CharField(max_length=258)
+    nom = models.CharField(max_length=128, blank=False, null=False)
+    password = models.CharField(max_length=258, blank=False, null=False)
 
     class Meta():
         db_table='user'
@@ -14,8 +14,8 @@ class User(models.Model):
 
 # Create your models here.
 class Facture(models.Model):
-    location = models.CharField(max_length=32)
-    state = models.CharField(max_length=32)
+    location = models.CharField(max_length=32, unique=True, blank=False, null=False)
+    state = models.CharField(max_length=32, blank=False, null=False)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
