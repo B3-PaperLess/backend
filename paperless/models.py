@@ -5,6 +5,7 @@ from django.db import models
 # Create your models here.
 class Facture(models.Model):
     location = models.CharField(max_length=32)
+    state = models.CharField(max_length=32)
 
     class Meta:
         db_table="facture"
