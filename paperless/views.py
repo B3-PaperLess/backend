@@ -1,11 +1,12 @@
-from django.http import HttpResponse, HttpRequest
+from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest
 
-from .models import Facture
+from .models import Facture, User
+
 
 def get_facture(request : HttpRequest):
     id = request.GET.get("id", None)
     if id == None:
-        return HttpResponse("parameter ID not found")
+        return HttpResponseBadRequest("parameter ID not found")
 
     facture = Facture.objects.get(id=id)
     return HttpResponse(facture)
@@ -18,7 +19,7 @@ def update_facture(request : HttpRequest):
     id = request.GET.get("id", None)
     state = request.GET.get("state", None)
     if id == None:
-        return HttpResponse("parameter ID not found")
+        return HttpResponseBadRequest("parameter ID not found")
 
     facture = Facture.objects.get(id=id)
 
@@ -31,7 +32,7 @@ def update_facture(request : HttpRequest):
 def delete_facture(request : HttpRequest):
     id = request.GET.get("id", None)
     if id == None:
-        return HttpResponse("parameter ID not found")
+        return HttpResponseBadRequest("parameter ID not found")
 
     facture = Facture.objects.get(id=id)
     return HttpResponse(facture.delete())
@@ -39,28 +40,64 @@ def delete_facture(request : HttpRequest):
 def create_facture(request : HttpRequest):
     location = request.GET.get("location", None)
     state=request.GET.get("state", "EN_COURS")
-    id = request.GET.get('id', None)
 
     if location == None:
-        return HttpResponse("parameter location not found")
+        return HttpResponseBadRequest("parameter location not found")
 
-    facture = Facture.objects.create()
-
-    facture.location = location
-    facture.state = state
-    facture.save()
+    facture = Facture.objects.create(location=location, state=state)
 
     return HttpResponse(facture)
 
 
-def get_user():
-    pass
+def get_user(request : HttpRequest):
+    siret = request.GET.get("siret", None)
 
-def delete_user():
-    pass
+    if siret == None:
+        return HttpResponseBadRequest("parameter Siret not found")
 
-def update_user():
-    pass
+    user = User.objects.get(siret=siret)
+    return HttpResponse(user)
 
-def create_user():
-    pass
+def delete_user(request : HttpRequest):
+    siret = request.GET.get("siret", None)
+
+    if siret == None:
+        return HttpResponseBadRequest("parameter Siret not found")
+
+    user = User.objects.get(siret=siret)
+    return HttpResponse(user.delete())
+
+def update_user(request : HttpRequest):
+    nom = request.GET.get("nom", None)
+    password = request.GET.get("password", None)
+    siret = request.GET.get("siret", None)
+
+    if siret == None:
+        return HttpResponseBadRequest("parameter Siret not found")
+
+    user = User.objects.get(siret=siret)
+
+    if nom != None:
+        user.nom = nom
+    if password != None:
+        user.password = password
+
+    user.save()
+
+    return HttpResponse(user)
+
+def create_user(request : HttpRequest):
+    siret = request.GET.get("siret", None)
+    nom = request.GET.get("nom", None)
+    password = request.GET.get("password", None)
+
+    if siret == None:
+        return HttpResponseBadRequest("parameter Siret not found")
+    if nom == None:
+        return HttpResponseBadRequest("parameter Nom not found")
+    if password == None:
+        return HttpResponseBadRequest("parameter Password not found")
+
+    user = User.objects.create(siret=siret, nom=nom, password=password)
+
+    return HttpResponse(user)
