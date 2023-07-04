@@ -2,6 +2,13 @@ from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest
 
 from .models import Facture, User
 
+def get_factures_with_siret(request : HttpRequest):
+    siret = request.GET.get("siret",None)
+    if siret == None:
+        return HttpResponseBadRequest("parameter siret not found")
+
+    factures = Facture.objects.filter(user=siret)
+    return HttpResponse(factures)
 
 def get_facture(request : HttpRequest):
     id = request.GET.get("id", None)
@@ -40,11 +47,15 @@ def delete_facture(request : HttpRequest):
 def create_facture(request : HttpRequest):
     location = request.GET.get("location", None)
     state=request.GET.get("state", "EN_COURS")
+    siret=request.GET.get("siret", None)
 
+    if siret == None:
+        return HttpResponseBadRequest("parameter siret not found")
     if location == None:
         return HttpResponseBadRequest("parameter location not found")
 
-    facture = Facture.objects.create(location=location, state=state)
+    user = User.objects.get(siret=siret)
+    facture = Facture.objects.create(user=user, location=location, state=state)
 
     return HttpResponse(facture)
 
