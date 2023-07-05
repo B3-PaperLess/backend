@@ -1,14 +1,16 @@
 from django.db import models
 
 class Entreprise(models.Model):
+    siret = models.BigIntegerField(primary_key=True)
     nom = models.CharField(max_length=64, blank=False, null=False)
-
+    adresse = models.CharField(max_length=255, blank=False, null=False)
+    ville = models.CharField(max_length=255, blank=False, null=False)
     class Meta:
-        db_table="entreprise"
+        db_table='entreprise'
         app_label='paperless'
 
 class User(models.Model):
-    siret = models.BigIntegerField(primary_key=True)
+    email = models.EmailField(unique=True, blank=False, null=False)
     nom = models.CharField(max_length=128, blank=False, null=False)
     password = models.CharField(max_length=258, blank=False, null=False)
     is_admin = models.BooleanField(default=False)
