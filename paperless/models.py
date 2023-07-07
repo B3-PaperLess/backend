@@ -11,7 +11,9 @@ class Entreprise(models.Model):
 
 class User(models.Model):
     email = models.EmailField(unique=True, blank=False, null=False)
-    nom = models.CharField(max_length=128, blank=False, null=False)
+    nom = models.CharField(max_length=128, blank=True,)
+    prenom = models.CharField(max_length=64, blank=True,)
+    num_tel = models.CharField(max_length=10, blank=True,)
     password = models.CharField(max_length=258, blank=False, null=False)
     is_admin = models.BooleanField(default=False)
     entreprise = models.ForeignKey(
