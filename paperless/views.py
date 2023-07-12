@@ -1,9 +1,12 @@
-import os
-from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest
-from django.views import View
-from django.shortcuts import render
-import jwt
+from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse
 from .models import Facture, User, Entreprise
+from .serializers import UserSerializer
+from django.core import serializers
+from django.shortcuts import render
+from django.views import View
+import json
+import jwt
+import os
 
 class entrepriseAPI(View):
     def get(self, request):
@@ -16,7 +19,7 @@ class entrepriseAPI(View):
         return HttpResponse(entreprise)
 
     def put(self, request):
-        params = get_POST_parameters(request, ["id","nom","adresse","ville"])
+        params = get_parameters(request)
         siret, nom, adresse, ville = params["id"],params["nom"],params["adresse"],params["ville"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
@@ -35,26 +38,44 @@ class entrepriseAPI(View):
         return HttpResponse(entreprise)
 
     def post(self, request):
-        params = get_POST_parameters(request, ["id", 'nom', 'adresse', 'ville'])
-        siret, nom, adresse, ville = \
-            params["id"], \
-            params["nom"], \
-            params["adresse"], \
-            params["ville"]
-        error = check_required_parameters(params, ['id', 'nom', 'adresse', 'ville'])
+        params = get_parameters(request)
+
+        error = check_required_parameters(params, ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social', 'ville', 'adresse'])
         if error is not None: return error
+
+        nom = params["nom"]
+        prenom = params["prenom"]
+        email = params["email"]
+        num_tel = params["num_tel"]
+        password = params["password"]
+        
+        siret = params["siret"]
+        raison_social=params['raison_social']
+        ville=params['ville']
+        adresse=params['adresse']
+
 
         entreprise = Entreprise.objects.create(
             siret=siret,
-            nom=nom,
+            nom=raison_social,
             adresse=adresse,
             ville=ville
         )
 
-        return HttpResponse(entreprise)
+        user = User.objects.create(
+            nom=nom,
+            prenom=prenom,
+            email=email,
+            num_tel=num_tel,
+            password=password,
+            is_admin=True,
+            entreprise=entreprise
+        )
+
+        return HttpResponse(True)
 
     def delete(self,request):
-        params = get_POST_parameters(request, ["id"])
+        params = get_parameters(request)
         siret = params["id"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
@@ -64,7 +85,7 @@ class entrepriseAPI(View):
 
 class userAPI(View):
     def get(self, request):
-        params = get_GET_parameters(request, ["id"])
+        params = get_parameters(request)
         user_id = params["id"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
@@ -74,47 +95,12 @@ class userAPI(View):
 
 
     def post(self, request):
-        required_params = ["password", "email", "entreprise_id"]
-        optional_params = ["is_admin", "nom", "prenom", "num_tel"]
-        all_params = required_params+optional_params
 
-        params = get_POST_parameters(request, all_params)
-
-        email = params["email"]
-        nom = params["nom"]
-        prenom = params["prenom"]
-        num_tel = params["num_tel"]
-        password = params["password"]
-        is_admin = params["is_admin"]
-        entreprise_id = params["entreprise_id"]
-
-        error = check_required_parameters(params, required_params)
-        if error is not None: return error
-
-        entreprise = Entreprise.objects.get(entreprise_id)
-
-        user = User.objects.create(
-            email=email,
-            password=password,
-            entreprise=entreprise)
-
-        #Params optionnels
-        if is_admin is not None:
-            user.is_admin = is_admin
-        if nom is not None:
-            user.nom = nom
-        if num_tel is not None:
-            user.num_tel = num_tel
-        if prenom is not None:
-            user.prenom = prenom
-
-        user.save()
-
-        return HttpResponse(user)
+        return HttpResponse(request)
 
 
     def put(self, request):
-        params = get_POST_parameters(request, ["id","nom", "prenom", "num_tel", "password","email"])
+        params = get_parameters(request)
         
         user_id = params["id"],
         nom = params["nom"]
@@ -145,7 +131,7 @@ class userAPI(View):
 
 
     def delete(self,request):
-        params = get_POST_parameters(request, ["id"])
+        params = get_parameters(request)
         user_id = params["id"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
@@ -165,7 +151,7 @@ class factureAPI(View):
         return HttpResponse(facture)
 
     def post(self, request):
-        params = get_POST_parameters(request, ["location", "state","user_id"])
+        params = get_parameters(request)
         location, state, user_id = params["location"], params["state"], params["id"]
         error = check_required_parameters(params, ['user_id', 'location', 'state'])
         if error is not None: return error
@@ -176,7 +162,7 @@ class factureAPI(View):
         return HttpResponse(facture)
 
     def put(self, request):
-        params = get_POST_parameters(request, ["id", "state"])
+        params = get_parameters(request)
         state, facture_id = params["state"], params["id"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
@@ -190,7 +176,7 @@ class factureAPI(View):
         return HttpResponse(facture)
 
     def delete(self,request):
-        params = get_POST_parameters(request, ["id"])
+        params = get_parameters(request)
         facture_id = params["id"]
         error = check_required_parameters(params, ["id"])
         if error is not None: return error
@@ -207,23 +193,28 @@ def get_factures_with_user(request : HttpRequest):
     factures = Facture.objects.filter(user=user_id)
     return HttpResponse(factures)
 
-def connect(request : HttpRequest):
-    params = get_GET_parameters(request, ["email","password"])
+
+def connect(request):
+    params = get_parameters(request)
     error = check_required_parameters(params, ["email", "password"])
     if error is not None: return error
     
     email=params["email"]
     password=params["password"]
 
-    user = User.objects.get(
-        email=email,
-        password=password
-    )
-
-    res = HttpResponse(user)
+    try:
+        user = User.objects.get(
+                email=email,
+                password=password
+        )
+        serializer = UserSerializer(user)
+        user = serializer.data
+    except User.DoesNotExist:
+        return HttpResponseBadRequest('Identification Impossible')
+    
     token = jwt.encode({"token":email}, os.getenv("TOKEN_KEY"), algorithm="HS256")
-    res.set_cookie("token", token, httponly=True, secure=True)
-    return res
+    return JsonResponse({'token':token, 'user':user}, safe=False)
+
 
 def get_GET_parameters(request, parameters, default_value=None) -> dict:
     ret = {}
@@ -231,11 +222,8 @@ def get_GET_parameters(request, parameters, default_value=None) -> dict:
         ret[parameter] = request.GET.get(parameter, default_value)
     return ret
 
-def get_POST_parameters(request, parameters, default_value=None) -> dict :
-    ret = {}
-    for parameter in parameters:
-        ret[parameter] = request.POST.get(parameter, default_value)
-    return ret
+def get_parameters(request) -> dict :
+    return json.loads(request.body.decode('utf-8'))
 
 def check_required_parameters(parameters:dict, required):
     error = None
