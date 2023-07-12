@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.views import View
 import json
 import jwt
-import os
+from .models import Facture, User, Entreprise
 
 class entrepriseAPI(View):
     def get(self, request):
@@ -216,6 +216,10 @@ def connect(request):
     return JsonResponse({'token':token, 'user':user}, safe=False)
 
 
+def sign_up(request : HttpRequest):
+    return HttpResponse("Not implemented !")
+
+
 def get_GET_parameters(request, parameters, default_value=None) -> dict:
     ret = {}
     for parameter in parameters:
@@ -232,3 +236,30 @@ def check_required_parameters(parameters:dict, required):
             error = HttpResponseBadRequest("parameter '" + key + "' is required")
             break
     return error
+
+
+def token_middleware(get_response):
+
+    not_authenticated_paths = ["paperless/connect", "paperless/signup"]
+
+    def middleware(request):
+        path = request.path
+        
+        found=False
+        for not_auth_path in not_authenticated_paths:
+            if not_auth_path in path:
+                found=True
+                break
+        
+        if not found:
+            token = request.COOKIES.get('token')
+            if token is None:
+                return HttpResponseBadRequest("Missing token")
+            email = jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["email"]
+            if not User.objects.filter(email=email).exists():
+                return HttpResponseBadRequest("Bad token")
+
+        response = get_response(request)
+        return response
+
+    return middleware
