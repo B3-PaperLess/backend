@@ -60,6 +60,22 @@ class entrepriseAPI(View):
         entreprise = Entreprise.objects.get(id=siret)
         return HttpResponse(entreprise.delete())
 
+
+def get_user_from_request(request):
+    admin_email = decode_token(request.COOKIES.get('token'))
+    admin_users = User.objects.filter(email=admin_email)
+    if len(admin_users) == 0:
+        return HttpResponseBadRequest("Incohérence du token avec la base de données")
+    return admin_users[0]
+
+
+def get_entreprise_from_request(request):
+    admin_email = decode_token(request.COOKIES.get('token'))
+    admin_users = User.objects.filter(email=admin_email)
+    if len(admin_users) == 0:
+        return HttpResponseBadRequest("Incohérence du token avec la base de données")
+    return admin_users[0].entreprise
+
 class userAPI(View):
     def get(self, request):
         params = get_parameters(request)
@@ -71,8 +87,33 @@ class userAPI(View):
         return HttpResponse(user)
 
     def post(self, request):
+        params = get_parameters(request)
 
-        return HttpResponse(request)
+        siret = get_entreprise_from_request(request).siret
+
+        error = check_required_parameters(params,
+                                          ['nom', 'prenom', 'email', 'num_tel', 'password'])
+        if error is not None: return error
+
+        nom = params["nom"]
+        prenom = params["prenom"]
+        email = params["email"]
+        num_tel = params["num_tel"]
+        password = params["password"]
+
+        entreprise = Entreprise.objects.get(siret=siret)
+
+        user = User.objects.create(
+            nom=nom,
+            prenom=prenom,
+            email=email,
+            num_tel=num_tel,
+            password=password,
+            is_admin=False,
+            entreprise=entreprise
+        )
+
+        return HttpResponse(user)
 
     def put(self, request):
         params = get_parameters(request)
@@ -229,7 +270,7 @@ def sign_up(request : HttpRequest):
         entreprise=entreprise
     )
     
-    return HttpResponse("Not implemented !")
+    return HttpResponse(user)
 
 
 def get_GET_parameters(request, parameters, default_value=None) -> dict:
@@ -268,7 +309,7 @@ def token_middleware(get_response):
             token = request.COOKIES.get('token')
             if token is None:
                 return HttpResponseBadRequest("Missing token")
-            email = jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
+            email = decode_token(token)
             if not len(User.objects.filter(email=email)) != 0:
                 return HttpResponseBadRequest("Bad token")
 
@@ -279,3 +320,7 @@ def token_middleware(get_response):
 def testFile(request):
     print(request.body)
     return HttpResponse(request)
+
+
+def decode_token(token):
+    return jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
