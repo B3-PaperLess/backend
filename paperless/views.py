@@ -6,12 +6,13 @@ from django.views import View
 import json
 import os
 import jwt
+import os
 from .models import Facture, User, Entreprise
+
 
 class entrepriseAPI(View):
     def get(self, request):
         params = request.GET
-
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
@@ -103,11 +104,9 @@ class userAPI(View):
         user = User.objects.get(id=user_id)
         return HttpResponse(user)
 
-
     def post(self, request):
 
         return HttpResponse(request)
-
 
     def put(self, request):
         params = get_parameters(request)
@@ -208,14 +207,14 @@ def connect(request):
     params = get_parameters(request)
     error = check_required_parameters(params, ["email", "password"])
     if error is not None: return error
-    
-    email=params["email"]
-    password=params["password"]
+
+    email = params["email"]
+    password = params["password"]
 
     try:
         user = User.objects.get(
-                email=email,
-                password=password
+            email=email,
+            password=password
         )
         serializer = UserSerializer(user)
         user = serializer.data
@@ -228,40 +227,6 @@ def connect(request):
 
 
 def sign_up(request : HttpRequest):
-    params = get_parameters(request)
-
-    error = check_required_parameters(params, ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social', 'ville', 'adresse'])
-    if error is not None: return error
-
-    nom = params["nom"]
-    prenom = params["prenom"]
-    email = params["email"]
-    num_tel = params["num_tel"]
-    password = params["password"]
-
-    siret = params["siret"]
-    raison_social=params['raison_social']
-    ville=params['ville']
-    adresse=params['adresse']
-
-
-    entreprise = Entreprise.objects.create(
-        siret=siret,
-        nom=raison_social,
-        adresse=adresse,
-        ville=ville
-    )
-
-    user = User.objects.create(
-        nom=nom,
-        prenom=prenom,
-        email=email,
-        num_tel=num_tel,
-        password=password,
-        is_admin=True,
-        entreprise=entreprise
-    )
-
     return HttpResponse("Not implemented !")
 
 
@@ -275,7 +240,8 @@ def get_GET_parameters(request, parameters, default_value=None) -> dict:
 def get_parameters(request) -> dict:
     return json.loads(request.body.decode('utf-8'))
 
-def check_required_parameters(parameters:dict, required):
+
+def check_required_parameters(parameters: dict, required):
     error = None
     for key in required:
         if parameters.get(key) is None:
@@ -308,17 +274,6 @@ def token_middleware(get_response):
         return response
 
     return middleware
-
-
 def testFile(request):
-    print('ici')
-    files = request.body  # Récupère tous les fichiers envoyés avec la clé 'file'
-    print(len(files))
-    print(files[:30])
-    # for file in files:
-        # print('la')
-        # with open(file.name, 'wb+') as destination:
-            # for chunk in file.chunks():
-                # print(chunk)
-                # destination.write(chunk)
-    return HttpResponse('ok')
+    print(request.body)
+    return HttpResponse(request)
