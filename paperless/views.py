@@ -1,14 +1,13 @@
-from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse
-from .models import Facture, User, Entreprise
+from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse, HttpResponseNotAllowed, \
+    HttpResponseBase
 from .serializers import UserSerializer, EntrepriseSerializer
-from django.shortcuts import render
 from django.views import View
 import json
 import os
 import jwt
 import os
 from .models import Facture, User, Entreprise
-
+from django.core import serializers
 
 class entrepriseAPI(View):
     def get(self, request):
@@ -21,11 +20,13 @@ class entrepriseAPI(View):
         entreprise_seria = EntrepriseSerializer(entreprise)
         entreprise_data = entreprise_seria.data
 
+
+
         admin = User.objects.get(entreprise=params['id'], is_admin=True)
         admin = UserSerializer(admin)
         admin = admin.data
 
-        return JsonResponse({'entreprise':entreprise_data, 'admin': admin}, safe=False)
+        return JsonResponse({'entreprise': entreprise_data, 'admin': admin}, safe=False)
 
     def put(self, request):
         params = get_parameters(request)
@@ -103,6 +104,9 @@ class userAPI(View):
 
         entreprise = Entreprise.objects.get(siret=siret)
 
+        if User.objects.filter(email=email).exists():
+            return HttpResponseBadRequest("Un utilisateur avec cette email existe déjà")
+
         user = User.objects.create(
             nom=nom,
             prenom=prenom,
@@ -152,6 +156,10 @@ class userAPI(View):
         if error is not None: return error
 
         user = User.objects.get(id=user_id)
+
+        if user.is_admin:
+            return HttpResponseBadRequest("user is an admin, can't delete")
+
         return HttpResponse(user.delete())
 
 
@@ -321,6 +329,47 @@ def testFile(request):
     print(request.body)
     return HttpResponse(request)
 
+def entreprise_users(request):
+    params = get_GET_parameters(request, ["id"])
+
+    error = check_required_parameters(params, ["id"])
+    if error is not None:
+        return error
+
+    siret = params["id"]
+    entreprise = Entreprise.objects.get(siret=siret)
+
+    users = User.objects.filter(entreprise=entreprise)
+    print(len(users))
+    users = [UserSerializer(user).data for user in users]
+
+    return JsonResponse({'users': users}, safe=False)
+
+def transfer_admin(request):
+    params = get_parameters(request)
+    check_required_parameters(params, "id")
+
+    id = params["id"]
+    user = User.objects.get(id=id)
+    admin_user = get_user_from_request(request)
+
+    if user.id == admin_user.id:
+        return HttpResponseBadRequest("Vous ne pouvez pas vous transferer vous même le role d'admin")
+    if not is_user_of_entreprise(user, admin_user.entreprise):
+        return HttpResponseBadRequest("Cet utilisateur n'appartient pas a la même entreprise que vous")
+    if not admin_user.is_admin:
+        return HttpResponseBadRequest("Vous n'êtes pas un admin")
+
+    user.is_admin = True
+    user.save()
+
+    admin_user.is_admin = False
+    admin_user.save()
+
+    return HttpResponse("transfert d'admin effectué")
+
+def is_user_of_entreprise(user, entreprise):
+    return user.entreprise.siret == entreprise.siret
 
 def decode_token(token):
     return jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
