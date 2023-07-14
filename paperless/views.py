@@ -306,5 +306,14 @@ def token_middleware(get_response):
     return middleware
 
 def testFile(request):
-    print(request.body)
-    return HttpResponse(request)
+    print('ici')
+    files = request.body  # Récupère tous les fichiers envoyés avec la clé 'file'
+    print(len(files))
+    print(files[:30])
+    # for file in files:
+        # print('la')
+        # with open(file.name, 'wb+') as destination:
+            # for chunk in file.chunks():
+                # print(chunk)
+                # destination.write(chunk)
+    return HttpResponse('ok')
