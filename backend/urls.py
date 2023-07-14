@@ -4,6 +4,5 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls), # à supprimer par la suite surement comme tout les modules admins
-    path('', lambda x : HttpResponse("index app")),
     path('paperless/', include('paperless.urls'))
 ]
