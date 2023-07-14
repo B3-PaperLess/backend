@@ -9,4 +9,5 @@ urlpatterns = [
     path('user', views.userAPI.as_view()),
     path('facture', views.factureAPI.as_view()),
     path('entreprise', views.entrepriseAPI.as_view()),
+    path('test', views.testFile)
 ]

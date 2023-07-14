@@ -1,22 +1,31 @@
 from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse
 from .models import Facture, User, Entreprise
-from .serializers import UserSerializer
-from django.core import serializers
+from .serializers import UserSerializer, EntrepriseSerializer
 from django.shortcuts import render
 from django.views import View
 import json
+import os
 import jwt
 from .models import Facture, User, Entreprise
 
+
 class entrepriseAPI(View):
     def get(self, request):
-        params = get_GET_parameters(request, ["id"])
-        siret = params["id"]
+        params = request.GET
+
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
+        siret = params["id"]
         entreprise = Entreprise.objects.get(siret=siret)
-        return HttpResponse(entreprise)
+        entreprise_seria = EntrepriseSerializer(entreprise)
+        entreprise_data = entreprise_seria.data
+
+        admin = User.objects.get(entreprise=params['id'], is_admin=True)
+        admin = UserSerializer(admin)
+        admin = admin.data
+
+        return JsonResponse({'entreprise':entreprise_data, 'admin': admin}, safe=False)
 
     def put(self, request):
         params = get_parameters(request)
@@ -93,11 +102,9 @@ class userAPI(View):
         user = User.objects.get(id=user_id)
         return HttpResponse(user)
 
-
     def post(self, request):
 
         return HttpResponse(request)
-
 
     def put(self, request):
         params = get_parameters(request)
@@ -128,7 +135,6 @@ class userAPI(View):
         user.save()
 
         return HttpResponse(user)
-
 
     def delete(self,request):
         params = get_parameters(request)
@@ -209,6 +215,7 @@ def connect(request):
         )
         serializer = UserSerializer(user)
         user = serializer.data
+
     except User.DoesNotExist:
         return HttpResponseBadRequest('Identification Impossible')
     
@@ -217,6 +224,40 @@ def connect(request):
 
 
 def sign_up(request : HttpRequest):
+    params = get_parameters(request)
+
+    error = check_required_parameters(params, ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social', 'ville', 'adresse'])
+    if error is not None: return error
+
+    nom = params["nom"]
+    prenom = params["prenom"]
+    email = params["email"]
+    num_tel = params["num_tel"]
+    password = params["password"]
+    
+    siret = params["siret"]
+    raison_social=params['raison_social']
+    ville=params['ville']
+    adresse=params['adresse']
+
+
+    entreprise = Entreprise.objects.create(
+        siret=siret,
+        nom=raison_social,
+        adresse=adresse,
+        ville=ville
+    )
+
+    user = User.objects.create(
+        nom=nom,
+        prenom=prenom,
+        email=email,
+        num_tel=num_tel,
+        password=password,
+        is_admin=True,
+        entreprise=entreprise
+    )
+
     return HttpResponse("Not implemented !")
 
 
@@ -263,3 +304,7 @@ def token_middleware(get_response):
         return response
 
     return middleware
+
+def testFile(request):
+    print(request.body)
+    return HttpResponse(request)
