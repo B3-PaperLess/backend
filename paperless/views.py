@@ -1,13 +1,10 @@
-from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse, HttpResponseNotAllowed, \
-    HttpResponseBase
+from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse
 from .serializers import UserSerializer, EntrepriseSerializer
 from django.views import View
 import json
-import os
 import jwt
 import os
 from .models import Facture, User, Entreprise
-from django.core import serializers
 
 class entrepriseAPI(View):
     def get(self, request):
@@ -20,8 +17,6 @@ class entrepriseAPI(View):
         entreprise_seria = EntrepriseSerializer(entreprise)
         entreprise_data = entreprise_seria.data
 
-
-
         admin = User.objects.get(entreprise=params['id'], is_admin=True)
         admin = UserSerializer(admin)
         admin = admin.data
@@ -30,7 +25,7 @@ class entrepriseAPI(View):
 
     def put(self, request):
         params = get_parameters(request)
-        siret, nom, adresse, ville = params["id"], params["nom"], params["adresse"], params["ville"]
+        siret, nom, adresse, ville, valide = params["id"], params["nom"], params["adresse"], params["ville"], params["valide"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
@@ -42,14 +37,14 @@ class entrepriseAPI(View):
             entreprise.adresse = adresse
         if ville is not None:
             entreprise.ville = ville
+        if valide is not None:
+            entreprise.valide = valide
 
         entreprise.save()
 
         return HttpResponse(entreprise)
 
     def post(self, request):
-        
-
         return HttpResponse(True)
 
     def delete(self,request):
@@ -340,7 +335,6 @@ def entreprise_users(request):
     entreprise = Entreprise.objects.get(siret=siret)
 
     users = User.objects.filter(entreprise=entreprise)
-    print(len(users))
     users = [UserSerializer(user).data for user in users]
 
     return JsonResponse({'users': users}, safe=False)
