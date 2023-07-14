@@ -8,7 +8,6 @@ import os
 import jwt
 from .models import Facture, User, Entreprise
 
-
 class entrepriseAPI(View):
     def get(self, request):
         params = request.GET
@@ -29,7 +28,7 @@ class entrepriseAPI(View):
 
     def put(self, request):
         params = get_parameters(request)
-        siret, nom, adresse, ville = params["id"],params["nom"],params["adresse"],params["ville"]
+        siret, nom, adresse, ville = params["id"], params["nom"], params["adresse"], params["ville"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
@@ -40,7 +39,7 @@ class entrepriseAPI(View):
         if adresse is not None:
             entreprise.adresse = adresse
         if ville is not None:
-            entreprise.ville=ville
+            entreprise.ville = ville
 
         entreprise.save()
 
@@ -49,7 +48,9 @@ class entrepriseAPI(View):
     def post(self, request):
         params = get_parameters(request)
 
-        error = check_required_parameters(params, ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social', 'ville', 'adresse'])
+        error = check_required_parameters(params,
+                                          ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social',
+                                           'ville', 'adresse'])
         if error is not None: return error
 
         nom = params["nom"]
@@ -57,11 +58,11 @@ class entrepriseAPI(View):
         email = params["email"]
         num_tel = params["num_tel"]
         password = params["password"]
-        
+
         siret = params["siret"]
-        raison_social=params['raison_social']
-        ville=params['ville']
-        adresse=params['adresse']
+        raison_social = params['raison_social']
+        ville = params['ville']
+        adresse = params['adresse']
 
 
         entreprise = Entreprise.objects.create(
@@ -102,9 +103,11 @@ class userAPI(View):
         user = User.objects.get(id=user_id)
         return HttpResponse(user)
 
+
     def post(self, request):
 
         return HttpResponse(request)
+
 
     def put(self, request):
         params = get_parameters(request)
@@ -130,13 +133,13 @@ class userAPI(View):
         if password is not None:
             user.password = password
         if email is not None:
-            user.email=email
+            user.email = email
 
         user.save()
 
         return HttpResponse(user)
 
-    def delete(self,request):
+    def delete(self, request):
         params = get_parameters(request)
         user_id = params["id"]
         error = check_required_parameters(params, ['id'])
@@ -181,7 +184,7 @@ class factureAPI(View):
         facture.save()
         return HttpResponse(facture)
 
-    def delete(self,request):
+    def delete(self, request):
         params = get_parameters(request)
         facture_id = params["id"]
         error = check_required_parameters(params, ["id"])
@@ -190,7 +193,8 @@ class factureAPI(View):
         facture = Facture.objects.get(id=facture_id)
         return HttpResponse(facture.delete())
 
-def get_factures_with_user(request : HttpRequest):
+
+def get_factures_with_user(request: HttpRequest):
     params = get_GET_parameters(request, ["id"])
     user_id = params["id"]
     error = check_required_parameters(params, ["id"])
@@ -217,10 +221,10 @@ def connect(request):
         user = serializer.data
 
     except User.DoesNotExist:
-        return HttpResponseBadRequest('Identification Impossible')
-    
-    token = jwt.encode({"token":email}, os.getenv("TOKEN_KEY"), algorithm="HS256")
-    return JsonResponse({'token':token, 'user':user}, safe=False)
+        return HttpResponseBadRequest('Email ou mot de passe invalide')
+
+    token = jwt.encode({"token": email}, os.getenv("TOKEN_KEY"), algorithm="HS256")
+    return JsonResponse({'token': token, 'user': user}, safe=False)
 
 
 def sign_up(request : HttpRequest):
@@ -234,7 +238,7 @@ def sign_up(request : HttpRequest):
     email = params["email"]
     num_tel = params["num_tel"]
     password = params["password"]
-    
+
     siret = params["siret"]
     raison_social=params['raison_social']
     ville=params['ville']
@@ -267,7 +271,8 @@ def get_GET_parameters(request, parameters, default_value=None) -> dict:
         ret[parameter] = request.GET.get(parameter, default_value)
     return ret
 
-def get_parameters(request) -> dict :
+
+def get_parameters(request) -> dict:
     return json.loads(request.body.decode('utf-8'))
 
 def check_required_parameters(parameters:dict, required):
@@ -280,30 +285,30 @@ def check_required_parameters(parameters:dict, required):
 
 
 def token_middleware(get_response):
-
-    not_authenticated_paths = ["paperless/connect", "paperless/signup"]
+    not_authenticated_paths = ["paperless/connect", "paperless/signup", "admin"]
 
     def middleware(request):
         path = request.path
-        
-        found=False
+
+        found = False
         for not_auth_path in not_authenticated_paths:
             if not_auth_path in path:
-                found=True
+                found = True
                 break
-        
+
         if not found:
             token = request.COOKIES.get('token')
             if token is None:
                 return HttpResponseBadRequest("Missing token")
-            email = jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["email"]
-            if not User.objects.filter(email=email).exists():
+            email = jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
+            if not len(User.objects.filter(email=email)) != 0:
                 return HttpResponseBadRequest("Bad token")
 
         response = get_response(request)
         return response
 
     return middleware
+
 
 def testFile(request):
     print('ici')
