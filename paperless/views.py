@@ -47,41 +47,7 @@ class entrepriseAPI(View):
         return HttpResponse(entreprise)
 
     def post(self, request):
-        params = get_parameters(request)
-
-        error = check_required_parameters(params,
-                                          ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social',
-                                           'ville', 'adresse'])
-        if error is not None: return error
-
-        nom = params["nom"]
-        prenom = params["prenom"]
-        email = params["email"]
-        num_tel = params["num_tel"]
-        password = params["password"]
-
-        siret = params["siret"]
-        raison_social = params['raison_social']
-        ville = params['ville']
-        adresse = params['adresse']
-
-
-        entreprise = Entreprise.objects.create(
-            siret=siret,
-            nom=raison_social,
-            adresse=adresse,
-            ville=ville
-        )
-
-        user = User.objects.create(
-            nom=nom,
-            prenom=prenom,
-            email=email,
-            num_tel=num_tel,
-            password=password,
-            is_admin=True,
-            entreprise=entreprise
-        )
+        
 
         return HttpResponse(True)
 
@@ -227,6 +193,42 @@ def connect(request):
 
 
 def sign_up(request : HttpRequest):
+    params = get_parameters(request)
+
+    error = check_required_parameters(params,
+                                        ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social',
+                                        'ville', 'adresse'])
+    if error is not None: return error
+
+    nom = params["nom"]
+    prenom = params["prenom"]
+    email = params["email"]
+    num_tel = params["num_tel"]
+    password = params["password"]
+
+    siret = params["siret"]
+    raison_social = params['raison_social']
+    ville = params['ville']
+    adresse = params['adresse']
+
+
+    entreprise = Entreprise.objects.create(
+        siret=siret,
+        nom=raison_social,
+        adresse=adresse,
+        ville=ville
+    )
+
+    user = User.objects.create(
+        nom=nom,
+        prenom=prenom,
+        email=email,
+        num_tel=num_tel,
+        password=password,
+        is_admin=True,
+        entreprise=entreprise
+    )
+    
     return HttpResponse("Not implemented !")
 
 
