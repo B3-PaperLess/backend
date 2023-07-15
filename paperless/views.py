@@ -155,12 +155,12 @@ class userAPI(View):
         return JsonResponse({"user": user_seria}, safe=False)
 
     def delete(self, request):
-        params = get_parameters(request)
-        user_id = params["id"]
-        error = check_required_parameters(params, ['id'])
+        print(request.GET)
+        params = request.GET
+        error = check_required_parameters(params, ['email'])
         if error is not None: return error
 
-        user = User.objects.get(id=user_id)
+        user = User.objects.get(email=params['email'])
 
         if user.is_admin:
             return HttpResponseBadRequest("L'utilisateur est un admin, impossible de supprimer")
@@ -168,6 +168,10 @@ class userAPI(View):
         user.delete()
         return HttpResponse(True)
 
+def me(request):
+    user = get_user_from_request(request)
+    user = UserSerializer(user)
+    return JsonResponse(user.data, safe=False)
 
 class factureAPI(View):
     def get(self, request):
@@ -352,16 +356,13 @@ def token_middleware(get_response):
     return middleware
 
 def entreprise_users(request):
-    params = get_GET_parameters(request, ["id"])
+    user = get_user_from_request(request)
+    if not user.is_admin:
+        return HttpResponseBadRequest("L'utilisateur est un admin, impossible de supprimer")
 
-    error = check_required_parameters(params, ["id"])
-    if error is not None:
-        return error
+    # entreprise = Entreprise.objects.get(siret=user.entreprise.siret)
 
-    siret = params["id"]
-    entreprise = Entreprise.objects.get(siret=siret)
-
-    users = User.objects.filter(entreprise=entreprise)
+    users = User.objects.filter(entreprise=user.entreprise)
     users = [UserSerializer(user).data for user in users]
 
     return JsonResponse({'users': users}, safe=False)

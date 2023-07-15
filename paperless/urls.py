@@ -9,6 +9,7 @@ urlpatterns = [
     path('entreprise-users', views.entreprise_users),
     path('transfer-admin', views.transfer_admin),
     path('user', views.userAPI.as_view()),
+    path('me', views.me),
     path('facture', views.factureAPI.as_view()),
     path('entreprise', views.entrepriseAPI.as_view()),
 ]
