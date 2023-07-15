@@ -1,5 +1,8 @@
+import uuid
+
 from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse
-from .serializers import UserSerializer, EntrepriseSerializer
+from django.core.files.storage import default_storage
+from .serializers import UserSerializer, EntrepriseSerializer, FactureSerializer
 from django.views import View
 import json
 import jwt
@@ -25,7 +28,8 @@ class entrepriseAPI(View):
 
     def put(self, request):
         params = get_parameters(request)
-        siret, nom, adresse, ville, valide = params["id"], params["nom"], params["adresse"], params["ville"], params["valide"]
+        siret, nom, adresse, ville, valide = params["id"], params["nom"], params["adresse"], params["ville"], params[
+            "valide"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
@@ -41,20 +45,21 @@ class entrepriseAPI(View):
             entreprise.valide = valide
 
         entreprise.save()
-
-        return HttpResponse(entreprise)
+        seria_entreprise = EntrepriseSerializer(entreprise).data
+        return JsonResponse({"entreprise" : seria_entreprise}, safe=False)
 
     def post(self, request):
         return HttpResponse(True)
 
-    def delete(self,request):
+    def delete(self, request):
         params = get_parameters(request)
         siret = params["id"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
         entreprise = Entreprise.objects.get(id=siret)
-        return HttpResponse(entreprise.delete())
+        entreprise.delete()
+        return HttpResponse(True)
 
 
 def get_user_from_request(request):
@@ -62,6 +67,7 @@ def get_user_from_request(request):
     admin_users = User.objects.filter(email=admin_email)
     if len(admin_users) == 0:
         return HttpResponseBadRequest("Incohérence du token avec la base de données")
+
     return admin_users[0]
 
 
@@ -70,6 +76,7 @@ def get_entreprise_from_request(request):
     admin_users = User.objects.filter(email=admin_email)
     if len(admin_users) == 0:
         return HttpResponseBadRequest("Incohérence du token avec la base de données")
+
     return admin_users[0].entreprise
 
 class userAPI(View):
@@ -80,7 +87,8 @@ class userAPI(View):
         if error is not None: return error
 
         user = User.objects.get(id=user_id)
-        return HttpResponse(user)
+        user_seria = UserSerializer(user).data
+        return JsonResponse({"user": user_seria}, safe=False)
 
     def post(self, request):
         params = get_parameters(request)
@@ -112,18 +120,19 @@ class userAPI(View):
             entreprise=entreprise
         )
 
-        return HttpResponse(user)
+        user_seria = UserSerializer(user).data
+        return JsonResponse({"user": user_seria}, safe=False)
 
     def put(self, request):
         params = get_parameters(request)
-        
+
         user_id = params["id"],
         nom = params["nom"]
         prenom = params["prenom"]
         num_tel = params["num_tel"]
         password = params["password"]
         email = params["email"]
-        
+
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
@@ -142,7 +151,8 @@ class userAPI(View):
 
         user.save()
 
-        return HttpResponse(user)
+        user_seria = UserSerializer(user).data
+        return JsonResponse({"user": user_seria}, safe=False)
 
     def delete(self, request):
         params = get_parameters(request)
@@ -153,9 +163,10 @@ class userAPI(View):
         user = User.objects.get(id=user_id)
 
         if user.is_admin:
-            return HttpResponseBadRequest("user is an admin, can't delete")
+            return HttpResponseBadRequest("L'utilisateur est un admin, impossible de supprimer")
 
-        return HttpResponse(user.delete())
+        user.delete()
+        return HttpResponse(True)
 
 
 class factureAPI(View):
@@ -166,18 +177,27 @@ class factureAPI(View):
         if error is not None: return error
 
         facture = Facture.objects.get(id=facture_id)
-        return HttpResponse(facture)
+
+        facture_seria = FactureSerializer(facture).data
+        return JsonResponse({"facture": facture_seria}, safe=False)
 
     def post(self, request):
-        params = get_parameters(request)
-        location, state, user_id = params["location"], params["state"], params["id"]
-        error = check_required_parameters(params, ['user_id', 'location', 'state'])
-        if error is not None: return error
+        user = get_user_from_request(request)
+        file = request.FILES.get("file")
+        state = request.POST.get("state")
 
-        user = User.objects.get(id=user_id)
-        facture = Facture.objects.create(user=user, location=location, state=state)
+        if state is None:
+            state = "NEW"
 
-        return HttpResponse(facture)
+        print(request.FILES)
+        location = str(uuid.uuid4())
+        default_storage.save("storage/factures/"+location, file)
+        facture = Facture.objects.create(user=user, location="storage/factures/"+location, state=state)
+
+
+        facture_seria = FactureSerializer(facture).data
+        return JsonResponse({"facture": facture_seria}, safe=False)
+
 
     def put(self, request):
         params = get_parameters(request)
@@ -191,16 +211,24 @@ class factureAPI(View):
             facture.state = state
 
         facture.save()
-        return HttpResponse(facture)
+
+        facture_seria = FactureSerializer(facture).data
+        return JsonResponse({"facture": facture_seria}, safe=False)
+
 
     def delete(self, request):
-        params = get_parameters(request)
+        params = get_GET_parameters(request, ["id"])
         facture_id = params["id"]
         error = check_required_parameters(params, ["id"])
         if error is not None: return error
 
         facture = Facture.objects.get(id=facture_id)
-        return HttpResponse(facture.delete())
+
+        if default_storage.exists(facture.location):
+            default_storage.delete(facture.location)
+
+        facture.delete()
+        return HttpResponse(True)
 
 
 def get_factures_with_user(request: HttpRequest):
@@ -209,9 +237,12 @@ def get_factures_with_user(request: HttpRequest):
     error = check_required_parameters(params, ["id"])
     if error is not None: return error
 
-    factures = Facture.objects.filter(user=user_id)
-    return HttpResponse(factures)
+    factures_query_set = Facture.objects.filter(user=user_id)
+    factures = []
 
+    for facture in factures_query_set:
+        factures.append(FactureSerializer(facture).data)
+    return JsonResponse({"factures": factures}, safe=False)
 
 def connect(request):
     params = get_parameters(request)
@@ -236,12 +267,12 @@ def connect(request):
     return JsonResponse({'token': token, 'user': user}, safe=False)
 
 
-def sign_up(request : HttpRequest):
+def sign_up(request: HttpRequest):
     params = get_parameters(request)
 
     error = check_required_parameters(params,
-                                        ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social',
-                                        'ville', 'adresse'])
+                                      ['nom', 'prenom', 'email', 'num_tel', 'password', 'siret', 'raison_social',
+                                       'ville', 'adresse'])
     if error is not None: return error
 
     nom = params["nom"]
@@ -254,7 +285,6 @@ def sign_up(request : HttpRequest):
     raison_social = params['raison_social']
     ville = params['ville']
     adresse = params['adresse']
-
 
     entreprise = Entreprise.objects.create(
         siret=siret,
@@ -272,7 +302,7 @@ def sign_up(request : HttpRequest):
         is_admin=True,
         entreprise=entreprise
     )
-    
+
     return HttpResponse(user)
 
 
@@ -320,9 +350,6 @@ def token_middleware(get_response):
         return response
 
     return middleware
-def testFile(request):
-    print(request.body)
-    return HttpResponse(request)
 
 def entreprise_users(request):
     params = get_GET_parameters(request, ["id"])
@@ -338,6 +365,7 @@ def entreprise_users(request):
     users = [UserSerializer(user).data for user in users]
 
     return JsonResponse({'users': users}, safe=False)
+
 
 def transfer_admin(request):
     params = get_parameters(request)
@@ -362,8 +390,10 @@ def transfer_admin(request):
 
     return HttpResponse("transfert d'admin effectué")
 
+
 def is_user_of_entreprise(user, entreprise):
     return user.entreprise.siret == entreprise.siret
+
 
 def decode_token(token):
     return jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]

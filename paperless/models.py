@@ -28,7 +28,7 @@ class User(models.Model):
 
 
 class Facture(models.Model):
-    location = models.CharField(max_length=32, unique=True, blank=False, null=False)
+    location = models.CharField(max_length=128, unique=True, blank=False, null=False)
     state = models.CharField(max_length=32, blank=False, null=False)
     user = models.ForeignKey(
         User,
