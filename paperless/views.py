@@ -28,12 +28,12 @@ class entrepriseAPI(View):
 
     def put(self, request):
         params = get_parameters(request)
-        siret, nom, adresse, ville, valide = params["id"], params["nom"], params["adresse"], params["ville"], params[
-            "valide"]
-        error = check_required_parameters(params, ['id'])
+        siret, nom, adresse, ville = params["siret"], params["nom"], params["adresse"], params["ville"]
+        error = check_required_parameters(params, ['siret'])
         if error is not None: return error
 
-        entreprise = Entreprise.objects.get(id=siret)
+        entreprise = Entreprise.objects.get(siret=siret)
+        print(entreprise.__dict__)
 
         if nom is not None:
             entreprise.nom = nom
@@ -41,8 +41,8 @@ class entrepriseAPI(View):
             entreprise.adresse = adresse
         if ville is not None:
             entreprise.ville = ville
-        if valide is not None:
-            entreprise.valide = valide
+        
+        entreprise.is_updated = True
 
         entreprise.save()
         seria_entreprise = EntrepriseSerializer(entreprise).data
