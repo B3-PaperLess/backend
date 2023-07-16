@@ -6,6 +6,7 @@ class Entreprise(models.Model):
     adresse = models.CharField(max_length=255, blank=False, null=False)
     ville = models.CharField(max_length=255, blank=False, null=False)
     valide = models.BooleanField(default=False, null=False, blank=False)
+    is_updated = models.BooleanField(default=False, null=False, blank=False)
     class Meta:
         db_table='entreprise'
         app_label='paperless'

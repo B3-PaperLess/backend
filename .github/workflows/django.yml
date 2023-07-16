@@ -27,4 +27,6 @@ jobs:
         pip install -r requirements.txt
     - name: Run Tests
       run: |
+        touch .env
+        echo TOKEN_KEY="TEST" >> .env
         python3 manage.py test
