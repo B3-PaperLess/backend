@@ -155,7 +155,6 @@ class userAPI(View):
         return JsonResponse({"user": user_seria}, safe=False)
 
     def delete(self, request):
-        print(request.GET)
         params = request.GET
         error = check_required_parameters(params, ['email'])
         if error is not None: return error
