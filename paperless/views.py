@@ -306,8 +306,10 @@ def sign_up(request: HttpRequest):
         is_admin=True,
         entreprise=entreprise
     )
+    serializer = UserSerializer(user)
+    user = serializer.data
 
-    return HttpResponse(user)
+    return JsonResponse({'user': user}, safe=False)
 
 
 def get_GET_parameters(request, parameters, default_value=None) -> dict:
