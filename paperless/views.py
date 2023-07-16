@@ -320,6 +320,7 @@ def get_GET_parameters(request, parameters, default_value=None) -> dict:
 
 
 def get_parameters(request) -> dict:
+    print(request.body)
     return json.loads(request.body.decode('utf-8'))
 
 
@@ -372,17 +373,19 @@ def entreprise_users(request):
 
 def transfer_admin(request):
     params = get_parameters(request)
-    check_required_parameters(params, "id")
-
-    id = params["id"]
-    user = User.objects.get(id=id)
+    check_required_parameters(params, "email")
+    email = params["email"]
+    user = User.objects.get(email=email)
     admin_user = get_user_from_request(request)
 
-    if user.id == admin_user.id:
+    if user.email == admin_user.email:
+        print("Vous ne pouvez pas vous transferer vous même le role d'admin")
         return HttpResponseBadRequest("Vous ne pouvez pas vous transferer vous même le role d'admin")
     if not is_user_of_entreprise(user, admin_user.entreprise):
+        print("Cet utilisateur n'appartient pas a la même entreprise que vous")
         return HttpResponseBadRequest("Cet utilisateur n'appartient pas a la même entreprise que vous")
     if not admin_user.is_admin:
+        print("Vous n'êtes pas un admin")
         return HttpResponseBadRequest("Vous n'êtes pas un admin")
 
     user.is_admin = True
