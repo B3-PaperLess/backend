@@ -7,7 +7,7 @@ import django.utils.timezone
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('paperless', '0003_alter_facture_location'),
+        ('paperless', '0004_entreprise_is_updated'),
     ]
 
     operations = [
