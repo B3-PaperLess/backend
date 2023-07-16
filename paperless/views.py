@@ -2,7 +2,7 @@ import uuid
 
 from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse
 from django.core.files.storage import default_storage
-from .serializers import UserSerializer, EntrepriseSerializer, FactureSerializer
+from .serializers import UserSerializer, EntrepriseSerializer, FactureSerializer,FactureWithUserSerializer
 from django.views import View
 import json
 import jwt
@@ -155,7 +155,6 @@ class userAPI(View):
         return JsonResponse({"user": user_seria}, safe=False)
 
     def delete(self, request):
-        print(request.GET)
         params = request.GET
         error = check_required_parameters(params, ['email'])
         if error is not None: return error
@@ -187,16 +186,15 @@ class factureAPI(View):
 
     def post(self, request):
         user = get_user_from_request(request)
-        file = request.FILES.get("file")
+        file = request.FILES['file']
         state = request.POST.get("state")
 
         if state is None:
             state = "NEW"
 
-        print(request.FILES)
         location = str(uuid.uuid4())
         default_storage.save("storage/factures/"+location, file)
-        facture = Facture.objects.create(user=user, location="storage/factures/"+location, state=state)
+        facture = Facture.objects.create(user=user, location="storage/factures/"+location, state=state, taille=file.size, nom=file.name.split('.')[0])
 
 
         facture_seria = FactureSerializer(facture).data
@@ -235,18 +233,18 @@ class factureAPI(View):
         return HttpResponse(True)
 
 
-def get_factures_with_user(request: HttpRequest):
-    params = get_GET_parameters(request, ["id"])
-    user_id = params["id"]
-    error = check_required_parameters(params, ["id"])
-    if error is not None: return error
-
-    factures_query_set = Facture.objects.filter(user=user_id)
+def get_factures_entreprise(request: HttpRequest):
+    user = get_user_from_request(request)
+    entreprise = get_entreprise_from_request(request)
+    users_entreprise = User.objects.filter(entreprise = entreprise)
     factures = []
+    for user in users_entreprise:
+        factures_user = Facture.objects.filter(user=user)
+        for facture in factures_user:
+            factures.append(facture)
+    factures = FactureWithUserSerializer(factures, many=True)
 
-    for facture in factures_query_set:
-        factures.append(FactureSerializer(facture).data)
-    return JsonResponse({"factures": factures}, safe=False)
+    return JsonResponse({"factures": factures.data}, safe=False)
 
 def connect(request):
     params = get_parameters(request)
