@@ -1,5 +1,8 @@
 from django.test import TestCase
 from . import models
+from django.urls import reverse
+from django.test import Client
+client = Client()
 
 #region Models tests
 
@@ -173,6 +176,66 @@ class FactureTestCase(TestCase):
 #endregion
 
 #region Views tests
+
+class AuthentificationTestCase(TestCase):
+    def setUp(self):
+        entreprise = models.Entreprise.objects.create(
+            siret=12345678901234,
+            nom="entreprise",
+            adresse="adresse",
+            ville="ville",
+        )
+        user = models.User.objects.create(
+            email="test@test.com",
+            nom="nom",
+            prenom="prenom",
+            num_tel="0123456789",
+            password="password",
+            is_admin=False,
+            entreprise=entreprise,
+        )
+        user.save()
+    
+    def test_login(self):
+        url = reverse('connect')
+        response = client.post(url, {'email': 'test@test.com', 'password': 'password'}, content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['user']['email'], 'test@test.com')
+
+    def test_login_wrong_input(self):
+        url = reverse('connect')
+        response = client.post(url, {'email': 'wrongtest@test.com', 'password': 'wrongpassword'}, content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.content, b'Email ou mot de passe invalide')
+    
+    def test_register(self):
+        url = reverse('signup')
+        newUser = {
+                "nom":"test",
+                "prenom":"test",
+                "email":"testSignUp@test.com",
+                "num_tel":"0000000000",
+                "password":"TEST_1234",
+                "passwordAgain":"TEST_1234",
+                "siret":"00000000000000",
+                "raison_social":"test",
+                "adresse":"test",
+                "ville":"test"
+            }
+        response = client.post(url, newUser, content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "user": {
+                "id": 2,
+                "email": "testSignUp@test.com",
+                "nom": "test",
+                "prenom": "test",
+                "num_tel": "0000000000",
+                "password": "TEST_1234",
+                "is_admin": True,
+                "entreprise": "00000000000000"
+            }
+        })
 
 #endregion
 
