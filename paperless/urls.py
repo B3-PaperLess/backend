@@ -5,7 +5,7 @@ from . import views
 urlpatterns = [
     path('connect', views.connect),
     path('signup', views.sign_up),
-    path('factures-user', views.get_factures_with_user),
+    path('entreprise-factures', views.get_factures_entreprise),
     path('entreprise-users', views.entreprise_users),
     path('transfer-admin', views.transfer_admin),
     path('user', views.userAPI.as_view()),
