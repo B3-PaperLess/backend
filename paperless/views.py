@@ -1,13 +1,17 @@
 import uuid
 
+import requests
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import MultipleObjectsReturned
 from django.http import HttpResponse, HttpRequest, HttpResponseBadRequest, JsonResponse
 from django.core.files.storage import default_storage
-from .serializers import UserSerializer, EntrepriseSerializer, FactureSerializer,FactureWithUserSerializer
+from .serializers import UserSerializer, EntrepriseSerializer, FactureSerializer, FactureWithUserSerializer
 from django.views import View
 import json
 import jwt
 import os
 from .models import Facture, User, Entreprise
+
 
 class entrepriseAPI(View):
     def get(self, request):
@@ -33,7 +37,6 @@ class entrepriseAPI(View):
         if error is not None: return error
 
         entreprise = Entreprise.objects.get(siret=siret)
-        print(entreprise.__dict__)
 
         if nom is not None:
             entreprise.nom = nom
@@ -41,12 +44,12 @@ class entrepriseAPI(View):
             entreprise.adresse = adresse
         if ville is not None:
             entreprise.ville = ville
-        
+
         entreprise.is_updated = True
 
         entreprise.save()
         seria_entreprise = EntrepriseSerializer(entreprise).data
-        return JsonResponse({"entreprise" : seria_entreprise}, safe=False)
+        return JsonResponse({"entreprise": seria_entreprise}, safe=False)
 
     def post(self, request):
         return HttpResponse(True)
@@ -64,20 +67,29 @@ class entrepriseAPI(View):
 
 def get_user_from_request(request):
     admin_email = decode_token(request.COOKIES.get('token'))
-    admin_users = User.objects.filter(email=admin_email)
-    if len(admin_users) == 0:
-        return HttpResponseBadRequest("Incohérence du token avec la base de données")
+    if admin_email is None:
+        return None
 
-    return admin_users[0]
+    try:
+        admin_users = User.objects.get(email=admin_email)
+    except ObjectDoesNotExist:
+        return None
+
+    return admin_users
 
 
 def get_entreprise_from_request(request):
     admin_email = decode_token(request.COOKIES.get('token'))
-    admin_users = User.objects.filter(email=admin_email)
-    if len(admin_users) == 0:
-        return HttpResponseBadRequest("Incohérence du token avec la base de données")
+    if admin_email is None:
+        return None
 
-    return admin_users[0].entreprise
+    try:
+        admin_users = User.objects.get(email=admin_email)
+    except ObjectDoesNotExist:
+        return None
+
+    return admin_users.entreprise
+
 
 class userAPI(View):
     def get(self, request):
@@ -167,10 +179,12 @@ class userAPI(View):
         user.delete()
         return HttpResponse(True)
 
+
 def me(request):
     user = get_user_from_request(request)
     user = UserSerializer(user)
     return JsonResponse(user.data, safe=False)
+
 
 class factureAPI(View):
     def get(self, request):
@@ -193,13 +207,12 @@ class factureAPI(View):
             state = "NEW"
 
         location = str(uuid.uuid4())
-        default_storage.save("storage/factures/"+location, file)
-        facture = Facture.objects.create(user=user, location="storage/factures/"+location, state=state, taille=file.size, nom=file.name.split('.')[0])
-
+        default_storage.save("storage/factures/" + location, file)
+        facture = Facture.objects.create(user=user, location="storage/factures/" + location, state=state,
+                                         taille=file.size, nom=file.name.split('.')[0])
 
         facture_seria = FactureSerializer(facture).data
         return JsonResponse({"facture": facture_seria}, safe=False)
-
 
     def put(self, request):
         params = get_parameters(request)
@@ -216,7 +229,6 @@ class factureAPI(View):
 
         facture_seria = FactureSerializer(facture).data
         return JsonResponse({"facture": facture_seria}, safe=False)
-
 
     def delete(self, request):
         params = get_GET_parameters(request, ["id"])
@@ -236,7 +248,7 @@ class factureAPI(View):
 def get_factures_entreprise(request: HttpRequest):
     user = get_user_from_request(request)
     entreprise = get_entreprise_from_request(request)
-    users_entreprise = User.objects.filter(entreprise = entreprise)
+    users_entreprise = User.objects.filter(entreprise=entreprise)
     factures = []
     for user in users_entreprise:
         factures_user = Facture.objects.filter(user=user)
@@ -245,6 +257,7 @@ def get_factures_entreprise(request: HttpRequest):
     factures = FactureWithUserSerializer(factures, many=True)
 
     return JsonResponse({"factures": factures.data}, safe=False)
+
 
 def connect(request):
     params = get_parameters(request)
@@ -318,9 +331,10 @@ def get_GET_parameters(request, parameters, default_value=None) -> dict:
 
 
 def get_parameters(request) -> dict:
-    print(request.body)
-    return json.loads(request.body.decode('utf-8'))
-
+    try:
+        return json.loads(request.body.decode('utf-8'))
+    except:
+        return {}
 
 def check_required_parameters(parameters: dict, required):
     error = None
@@ -400,4 +414,110 @@ def is_user_of_entreprise(user, entreprise):
 
 
 def decode_token(token):
-    return jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
+    try:
+        return jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
+    except:
+        return None
+
+
+def entreprise_updated_middleware(get_response):
+    target_paths = ["paperless/facture", "paperless/entreprise"]
+
+    def middleware(request):
+        path = request.path
+        method = request.method
+
+        # Si on ne trouve pas l'entreprise, cela doit être
+        try:
+            entreprise = get_entreprise_from_request(request)
+        except:
+            response = get_response(request)
+            return response
+
+        target_path = False
+        for target_p in target_paths:
+            if target_p in path:
+                target_path = target_p
+                break
+
+        should_test = False
+
+        if "paperless/facture" in target_path:
+            if method == "POST" or method == "PUT":
+                should_test = True
+        if "paperless/entreprise" in target_path:
+            if method == "PUT":
+                should_test = True
+
+        if should_test and entreprise.is_updated:
+            return HttpResponseBadRequest(
+                "Les informations de l'entreprise ont été mis à jour, vous devez attendre leur vérification")
+
+        response = get_response(request)
+        return response
+
+    return middleware
+
+
+def send_to_chorus(request):
+    """ envoyer une facture à chorus
+
+    Il s'agit d'un exemple car nous n'avons pas accès la base école
+    """
+
+    # Obtention de la facture
+    try:
+        file = request.FILES['file']
+        file = {"file": file}
+    except:
+        return HttpResponseBadRequest("La facture est manquante")
+
+    # Ici on devrait écrire le code pour faire appel à l'api de chorus
+    r = requests.post("chorus/api/...", files=file)
+
+    # Et ici gérer les différentes erreurs que nous renvoi chorus
+    if not r.ok:
+        return HttpResponseBadRequest("Quelque chose s'est mal passé lors de l'envoi de la facture à chorus")
+
+    return HttpResponse("facture envoyée avec succès")
+
+
+def receive_from_chorus(request):
+    """ Obtenir une facture de chorus
+
+    Il s'agit d'un exemple car nous n'avons pas accès la base école
+    """
+
+    # Obtention des paramètres
+    params = get_parameters(request)
+    check_required_parameters(params, "siret")
+
+    file = request.FILES['file']
+    state = params["state"]
+    siret = params["siret"]
+
+    # Obtention de l'entreprise, puis de l'utilisateur
+    # et vérification de leur existance
+    try:
+        entreprise = Entreprise.objects.get(siret=siret)
+    except ObjectDoesNotExist:
+        return HttpResponseBadRequest("L'entreprise n'existe pas")
+
+    try:
+        user = User.objects.filter(entreprise=entreprise, is_admin=True)
+    except ObjectDoesNotExist:
+        return HttpResponseBadRequest("Aucun utilisateur admin de cette entreprise")
+    except MultipleObjectsReturned:
+        return HttpResponseBadRequest(
+            "Incohérence des données, plusieurs administrateurs trouvés pour cette entreprise")
+
+    if state is None:
+        state = "NEW"
+
+    # Insertion de la facture en base de données
+    location = str(uuid.uuid4())
+    default_storage.save("storage/factures/" + location, file)
+    facture = Facture.objects.create(user, location="storage/factures/" + location, state=state, taille=file.size,
+                                     nom=file.name.split('.')[0])
+
+    return HttpResponse("Facture intégrée avec succès")
