@@ -16,12 +16,6 @@ jobs:
         python-version: [3.9]
 
     steps:
-    - name: Make envfile
-      uses: SpicyPizza/create-envfile@v2.0
-      with:
-        envkey_DEBUG: false
-        envkey_TOKEN_KEY: "token_key"
-        file_name: .env
     - uses: actions/checkout@v3
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
@@ -33,5 +27,6 @@ jobs:
         pip install -r requirements.txt
     - name: Run Tests
       run: |
-        ls
+        touch .env
+        echo TOKEN_KEY="TEST" >> .env
         python3 manage.py test
