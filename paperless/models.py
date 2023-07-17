@@ -30,7 +30,7 @@ class User(models.Model):
 
 class Facture(models.Model):
     nom = models.CharField(max_length=128, blank=False, null=False)
-    location = models.CharField(max_length=128, unique=True, blank=False, null=False)
+    location = models.CharField(max_length=128, blank=False, null=True)
     taille = models.IntegerField(blank=False, null=False)
     state = models.CharField(max_length=32, blank=False, null=False)
     date = models.DateTimeField(auto_now=True, blank=False, null=False)

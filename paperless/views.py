@@ -1,5 +1,4 @@
 import uuid
-
 import requests
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import MultipleObjectsReturned
@@ -13,6 +12,10 @@ import os
 from .models import Facture, User, Entreprise
 
 
+# region API
+
+# region API CRUD
+
 class entrepriseAPI(View):
     def get(self, request):
         params = request.GET
@@ -20,7 +23,12 @@ class entrepriseAPI(View):
         if error is not None: return error
 
         siret = params["id"]
-        entreprise = Entreprise.objects.get(siret=siret)
+
+        try:
+            entreprise = Entreprise.objects.get(siret=siret)
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Entreprise non trouvée")
+
         entreprise_seria = EntrepriseSerializer(entreprise)
         entreprise_data = entreprise_seria.data
 
@@ -36,7 +44,10 @@ class entrepriseAPI(View):
         error = check_required_parameters(params, ['siret'])
         if error is not None: return error
 
-        entreprise = Entreprise.objects.get(siret=siret)
+        try:
+            entreprise = Entreprise.objects.get(siret=siret)
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Entreprise non trouvée")
 
         if nom is not None:
             entreprise.nom = nom
@@ -60,35 +71,13 @@ class entrepriseAPI(View):
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
-        entreprise = Entreprise.objects.get(id=siret)
+        try:
+            entreprise = Entreprise.objects.get(id=siret)
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Entreprise non trouvée")
+
         entreprise.delete()
         return HttpResponse(True)
-
-
-def get_user_from_request(request):
-    admin_email = decode_token(request.COOKIES.get('token'))
-    if admin_email is None:
-        return None
-
-    try:
-        admin_users = User.objects.get(email=admin_email)
-    except ObjectDoesNotExist:
-        return None
-
-    return admin_users
-
-
-def get_entreprise_from_request(request):
-    admin_email = decode_token(request.COOKIES.get('token'))
-    if admin_email is None:
-        return None
-
-    try:
-        admin_users = User.objects.get(email=admin_email)
-    except ObjectDoesNotExist:
-        return None
-
-    return admin_users.entreprise
 
 
 class userAPI(View):
@@ -98,7 +87,11 @@ class userAPI(View):
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
-        user = User.objects.get(id=user_id)
+        try:
+            user = User.objects.get(id=user_id)
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Utilisateur non trouvé")
+
         user_seria = UserSerializer(user).data
         return JsonResponse({"user": user_seria}, safe=False)
 
@@ -117,7 +110,10 @@ class userAPI(View):
         num_tel = params["num_tel"]
         password = params["password"]
 
-        entreprise = Entreprise.objects.get(siret=siret)
+        try:
+            entreprise = Entreprise.objects.get(siret=siret)
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Entreprise non trouvée, SIRET invalide")
 
         if User.objects.filter(email=email).exists():
             return HttpResponseBadRequest("Un utilisateur avec cette email existe déjà")
@@ -145,8 +141,9 @@ class userAPI(View):
         num_tel = params["tel"]
         email = params["email"]
 
-
         user = get_user_from_request(request)
+        if user is None:
+            return HttpResponseBadRequest("Utilisateur connecté non trouvé")
 
         if nom is not None:
             user.nom = nom
@@ -167,7 +164,17 @@ class userAPI(View):
         error = check_required_parameters(params, ['email'])
         if error is not None: return error
 
-        user = User.objects.get(email=params['email'])
+        connected_user = get_user_from_request(request)
+        if connected_user is None:
+            return HttpResponseBadRequest("Utilisateur connecté non trouvé")
+
+        try:
+            user = User.objects.get(email=params['email'])
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Utilisateur non trouvé, l'email est invalide")
+
+        if connected_user.id == user.id:
+            return HttpResponseBadRequest("Vous ne pouvez pas supprimer ce compte tant que vous y êtes connecté")
 
         if user.is_admin:
             return HttpResponseBadRequest("L'utilisateur est un admin, impossible de supprimer")
@@ -176,26 +183,6 @@ class userAPI(View):
         return HttpResponse(True)
 
 
-def me(request):
-    user = get_user_from_request(request)
-    user = UserSerializer(user)
-    return JsonResponse(user.data, safe=False)
-
-def password_change(request):
-    params = get_parameters(request)
-    user = get_user_from_request(request)
-
-    error = check_required_parameters(params, ['passwordCurrent', 'passwordNew'])
-    if error is not None: return error
-    
-    if user.password != params['passwordCurrent']:
-        return HttpResponseBadRequest('Mauvais mot de passe')
-    
-    user.password = params['passwordNew']
-    user.save()
-
-    return JsonResponse({'response': True}, safe=False)
-
 class factureAPI(View):
     def get(self, request):
         params = get_GET_parameters(request, ["id"])
@@ -203,37 +190,52 @@ class factureAPI(View):
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
-        facture = Facture.objects.get(id=facture_id)
+        try:
+            facture = Facture.objects.get(id=facture_id)
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Facture non trouvée")
 
         facture_seria = FactureSerializer(facture).data
         return JsonResponse({"facture": facture_seria}, safe=False)
 
     def post(self, request):
         user = get_user_from_request(request)
-        file = request.FILES['file']
-        state = request.POST.get("state")
+        if user is None:
+            return HttpResponseBadRequest("Utilisateur connecté non trouvé")
 
-        if state is None:
-            state = "NEW"
+        file = request.FILES['file']
 
         location = str(uuid.uuid4())
+
+        # Sauvegarde du fichier de la facture et insertion en base de donnée
         default_storage.save("storage/factures/" + location, file)
-        facture = Facture.objects.create(user=user, location="storage/factures/" + location, state=state,
+        facture = Facture.objects.create(user=user, location="storage/factures/" + location, state="NEW",
                                          taille=file.size, nom=file.name.split('.')[0])
+
+        # Envoi de la facture à chorus, on place le retour a True par défaut car aucun accès à la base école
+        # ret = send_to_chorus(file)
+        ret = True
+
+        # Si tout s'est bien passé on passe l'état à envoyé, et on supprime la facture de notre bdd
+        if ret:
+            facture.state = "SENT"
+            delete_facture_file(facture)
+        else:
+            return HttpResponseBadRequest(ret)
 
         facture_seria = FactureSerializer(facture).data
         return JsonResponse({"facture": facture_seria}, safe=False)
 
     def put(self, request):
         params = get_parameters(request)
-        state, facture_id = params["state"], params["id"]
+        facture_id = params["id"]
         error = check_required_parameters(params, ['id'])
         if error is not None: return error
 
-        facture = Facture.objects.get(id=facture_id)
-
-        if state is not None:
-            facture.state = state
+        try:
+            facture = Facture.objects.get(id=facture_id)
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Facture non trouvée")
 
         facture.save()
 
@@ -246,17 +248,52 @@ class factureAPI(View):
         error = check_required_parameters(params, ["id"])
         if error is not None: return error
 
-        facture = Facture.objects.get(id=facture_id)
+        try:
+            facture = Facture.objects.get(id=facture_id)
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest("Facture non trouvée")
 
-        if default_storage.exists(facture.location):
-            default_storage.delete(facture.location)
-
+        # Suppression du fichier et de la ligne en BDD
+        delete_facture_file(facture)
         facture.delete()
+
         return HttpResponse(True)
 
 
-def get_factures_entreprise(request: HttpRequest):
+# endregion API CRUD
+
+# region API functions
+
+def me(request):
     user = get_user_from_request(request)
+    if user is None:
+        return HttpResponseBadRequest("Utilisateur connecté non trouvé")
+    user = UserSerializer(user)
+    return JsonResponse(user.data, safe=False)
+
+
+def password_change(request):
+    params = get_parameters(request)
+    user = get_user_from_request(request)
+    if user is None:
+        return HttpResponseBadRequest("Utilisateur connecté non trouvé")
+
+    error = check_required_parameters(params, ['passwordCurrent', 'passwordNew'])
+    if error is not None: return error
+
+    if user.password != params['passwordCurrent']:
+        return HttpResponseBadRequest('Mauvais mot de passe')
+
+    user.password = params['passwordNew']
+    user.save()
+
+    return JsonResponse({'response': True}, safe=False)
+
+
+def get_factures_entreprise(request: HttpRequest):
+    """ Obtenir les factures d'une entreprise
+    """
+
     entreprise = get_entreprise_from_request(request)
     users_entreprise = User.objects.filter(entreprise=entreprise)
     factures = []
@@ -265,12 +302,10 @@ def get_factures_entreprise(request: HttpRequest):
         for facture in factures_user:
             factures.append(facture)
     factures = FactureWithUserSerializer(factures, many=True)
-
     return JsonResponse({"factures": factures.data}, safe=False)
 
 
 def connect(request):
-    print(request)
     params = get_parameters(request)
     error = check_required_parameters(params, ["email", "password"])
     if error is not None: return error
@@ -286,7 +321,7 @@ def connect(request):
         serializer = UserSerializer(user)
         user = serializer.data
 
-    except User.DoesNotExist:
+    except ObjectDoesNotExist:
         return HttpResponseBadRequest('Email ou mot de passe invalide')
 
     token = jwt.encode({"token": email}, os.getenv("TOKEN_KEY"), algorithm="HS256")
@@ -333,28 +368,107 @@ def sign_up(request: HttpRequest):
 
     return JsonResponse({'user': user}, safe=False)
 
-def get_GET_parameters(request, parameters, default_value=None) -> dict:
-    ret = {}
-    for parameter in parameters:
-        ret[parameter] = request.GET.get(parameter, default_value)
-    return ret
 
-def get_parameters(request) -> dict:
+def entreprise_users(request):
+    """ Obtenir les utilisateurs d'une entreprise
+    """
+    user = get_user_from_request(request)
+    if user is None:
+        return HttpResponseBadRequest("Utilisateur connecté non trouvé")
+    if not user.is_admin:
+        return HttpResponseBadRequest("L'utilisateur est un admin, impossible de supprimer")
+
+    # entreprise = Entreprise.objects.get(siret=user.entreprise.siret)
+
+    users = User.objects.filter(entreprise=user.entreprise)
+    users = [UserSerializer(user).data for user in users]
+
+    return JsonResponse({'users': users}, safe=False)
+
+
+def transfer_admin(request):
+    """ Transferer le role d'admin de l'entreprise à un autre utilisateur de l'entreprise
+    """
+    params = get_parameters(request)
+    check_required_parameters(params, "email")
+    email = params["email"]
+
     try:
-        return json.loads(request.body.decode('utf-8'))
-    except:
-        return {}
+        user = User.objects.get(email=email)
+    except ObjectDoesNotExist:
+        return HttpResponseBadRequest("Utilisateur non trouvé")
 
-def check_required_parameters(parameters: dict, required):
-    error = None
-    for key in required:
-        if parameters.get(key) is None:
-            error = HttpResponseBadRequest("parameter '" + key + "' is required")
-            break
-    return error
+    admin_user = get_user_from_request(request)
+    if admin_user is None:
+        return HttpResponseBadRequest("Utilisateur connecté non trouvé")
+
+    if not admin_user.is_admin:
+        return HttpResponseBadRequest("Vous n'êtes pas un admin")
+    if user.email == admin_user.email:
+        return HttpResponseBadRequest("Vous ne pouvez pas vous transferer vous même le role d'admin")
+    if user.entreprise.siret != admin_user.entreprise.siret:
+        return HttpResponseBadRequest("Cet utilisateur n'appartient pas a la même entreprise que vous")
+
+
+    user.is_admin = True
+    user.save()
+
+    admin_user.is_admin = False
+    admin_user.save()
+
+    return HttpResponse("transfert d'admin effectué")
+
+
+# endregion
+
+# endregion
+
+# region Middlewares
+def entreprise_updated_middleware(get_response):
+    target_paths = ["paperless/facture", "paperless/entreprise"]
+
+    def middleware(request):
+
+        path = request.path
+        method = request.method
+
+        # Si on ne trouve pas l'entreprise, cela doit être
+        try:
+            entreprise = get_entreprise_from_request(request)
+        except:
+            return get_response(request)
+
+        target_path = ""
+
+        for target_p in target_paths:
+            if target_p in path:
+                target_path = target_p
+                break
+
+        should_test = False
+
+        if target_path != "":
+            if "paperless/facture" == target_path:
+                if method == "POST" or method == "PUT":
+                    should_test = True
+            if "paperless/entreprise" == target_path:
+                if method == "PUT":
+                    should_test = True
+
+        if should_test and entreprise.is_updated:
+            return HttpResponseBadRequest(
+                "Les informations de l'entreprise ont été mis à jour, vous devez attendre leur vérification")
+
+        response = get_response(request)
+
+        return response
+
+    return middleware
 
 
 def token_middleware(get_response):
+    """ Middleware permettant de vérifier la présence du token dans les cookies de la requête
+    """
     not_authenticated_paths = ["paperless/connect", "paperless/signup", "admin"]
 
     def middleware(request):
@@ -379,114 +493,26 @@ def token_middleware(get_response):
 
     return middleware
 
-def entreprise_users(request):
-    user = get_user_from_request(request)
-    if not user.is_admin:
-        return HttpResponseBadRequest("L'utilisateur est un admin, impossible de supprimer")
 
-    # entreprise = Entreprise.objects.get(siret=user.entreprise.siret)
+# endregion
 
-    users = User.objects.filter(entreprise=user.entreprise)
-    users = [UserSerializer(user).data for user in users]
+# region Chorus
 
-    return JsonResponse({'users': users}, safe=False)
-
-def transfer_admin(request):
-    params = get_parameters(request)
-    check_required_parameters(params, "email")
-    email = params["email"]
-    user = User.objects.get(email=email)
-    admin_user = get_user_from_request(request)
-
-    if user.email == admin_user.email:
-        print("Vous ne pouvez pas vous transferer vous même le role d'admin")
-        return HttpResponseBadRequest("Vous ne pouvez pas vous transferer vous même le role d'admin")
-    if not is_user_of_entreprise(user, admin_user.entreprise):
-        print("Cet utilisateur n'appartient pas a la même entreprise que vous")
-        return HttpResponseBadRequest("Cet utilisateur n'appartient pas a la même entreprise que vous")
-    if not admin_user.is_admin:
-        print("Vous n'êtes pas un admin")
-        return HttpResponseBadRequest("Vous n'êtes pas un admin")
-
-    user.is_admin = True
-    user.save()
-
-    admin_user.is_admin = False
-    admin_user.save()
-
-    return HttpResponse("transfert d'admin effectué")
-
-def is_user_of_entreprise(user, entreprise):
-    return user.entreprise.siret == entreprise.siret
-
-def decode_token(token):
-    try:
-        return jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
-    except:
-        return None
-
-def entreprise_updated_middleware(get_response):
-    target_paths = ["paperless/facture", "paperless/entreprise"]
-
-    def middleware(request):
-
-        path = request.path
-        method = request.method
-
-        # Si on ne trouve pas l'entreprise, cela doit être
-        try:
-            entreprise = get_entreprise_from_request(request)
-        except:
-            return get_response(request)
-
-        target_path = False
-
-        for target_p in target_paths:
-            if target_p in path:
-                target_path = target_p
-                break
-    
-        should_test = False
-
-        if target_path:
-            if "paperless/facture" in target_path:
-                if method == "POST" or method == "PUT":
-                    should_test = True
-            if "paperless/entreprise" in target_path:
-                if method == "PUT":
-                    should_test = True
-
-        if should_test and entreprise.is_updated:
-            return HttpResponseBadRequest(
-                "Les informations de l'entreprise ont été mis à jour, vous devez attendre leur vérification")
-
-        response = get_response(request)
-
-        return response
-
-    return middleware
-
-def send_to_chorus(request):
+def send_to_chorus(file):
     """ envoyer une facture à chorus
 
     Il s'agit d'un exemple car nous n'avons pas accès la base école
     """
-
-    # Obtention de la facture
-    try:
-        file = request.FILES['file']
-        file = {"file": file}
-    except:
-        return HttpResponseBadRequest("La facture est manquante")
 
     # Ici on devrait écrire le code pour faire appel à l'api de chorus
     r = requests.post("chorus/api/...", files=file)
 
     # Et ici gérer les différentes erreurs que nous renvoi chorus
     if not r.ok:
-        return HttpResponseBadRequest("Quelque chose s'est mal passé lors de l'envoi de la facture à chorus")
+        return "Quelque chose s'est mal passé lors de l'envoi de la facture à chorus"
 
-    return HttpResponse("facture envoyée avec succès")
+    return True
+
 
 def receive_from_chorus(request):
     """ Obtenir une facture de chorus
@@ -510,7 +536,7 @@ def receive_from_chorus(request):
         return HttpResponseBadRequest("L'entreprise n'existe pas")
 
     try:
-        user = User.objects.filter(entreprise=entreprise, is_admin=True)
+        user = User.objects.get(entreprise=entreprise, is_admin=True)
     except ObjectDoesNotExist:
         return HttpResponseBadRequest("Aucun utilisateur admin de cette entreprise")
     except MultipleObjectsReturned:
@@ -523,7 +549,82 @@ def receive_from_chorus(request):
     # Insertion de la facture en base de données
     location = str(uuid.uuid4())
     default_storage.save("storage/factures/" + location, file)
-    facture = Facture.objects.create(user, location="storage/factures/" + location, state=state, taille=file.size,
-                                     nom=file.name.split('.')[0])
+    Facture.objects.create(user, location="storage/factures/" + location, state=state, taille=file.size,
+                           nom=file.name.split('.')[0])
 
     return HttpResponse("Facture intégrée avec succès")
+
+
+# endregion
+
+# region Utilities
+
+def get_GET_parameters(request, parameters, default_value=None) -> dict:
+    ret = {}
+    for parameter in parameters:
+        ret[parameter] = request.GET.get(parameter, default_value)
+    return ret
+
+
+def get_parameters(request) -> dict:
+    try:
+        return json.loads(request.body.decode('utf-8'))
+    except:
+        return {}
+
+
+def check_required_parameters(parameters: dict, required):
+    """ Verifie les paramètres requis
+    """
+    error = None
+    for key in required:
+        if parameters.get(key) is None:
+            error = HttpResponseBadRequest("parameter '" + key + "' is required")
+            break
+    return error
+
+
+def get_user_from_request(request):
+    admin_email = decode_token(request.COOKIES.get('token'))
+    if admin_email is None:
+        return None
+
+    try:
+        admin_users = User.objects.get(email=admin_email)
+    except ObjectDoesNotExist:
+        return None
+
+    return admin_users
+
+
+def get_entreprise_from_request(request):
+    admin_email = decode_token(request.COOKIES.get('token'))
+    if admin_email is None:
+        return None
+
+    try:
+        admin_users = User.objects.get(email=admin_email)
+    except ObjectDoesNotExist:
+        return None
+
+    return admin_users.entreprise
+
+
+def delete_facture_file(facture):
+    if facture.location is None:
+        return
+
+    if default_storage.exists(facture.location):
+        default_storage.delete(facture.location)
+
+    facture.location = None
+    facture.save()
+
+
+def decode_token(token):
+    try:
+        return jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
+    except:
+        return None
+
+# endregion
