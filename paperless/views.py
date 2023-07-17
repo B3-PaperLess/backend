@@ -18,21 +18,11 @@ from .models import Facture, User, Entreprise
 
 class entrepriseAPI(View):
     def get(self, request):
-        params = request.GET
-        error = check_required_parameters(params, ['id'])
-        if error is not None: return error
-
-        siret = params["id"]
-
-        try:
-            entreprise = Entreprise.objects.get(siret=siret)
-        except ObjectDoesNotExist:
-            return HttpResponseBadRequest("Entreprise non trouvée")
-
+        entreprise = get_entreprise_from_request(request)
         entreprise_seria = EntrepriseSerializer(entreprise)
         entreprise_data = entreprise_seria.data
 
-        admin = User.objects.get(entreprise=params['id'], is_admin=True)
+        admin = User.objects.get(entreprise=entreprise, is_admin=True)
         admin = UserSerializer(admin)
         admin = admin.data
 
