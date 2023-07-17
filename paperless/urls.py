@@ -12,4 +12,5 @@ urlpatterns = [
     path('me', views.me),
     path('facture', views.factureAPI.as_view()),
     path('entreprise', views.entrepriseAPI.as_view()),
+    path('password-change', views.password_change),
 ]

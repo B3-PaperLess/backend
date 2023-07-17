@@ -137,18 +137,16 @@ class userAPI(View):
 
     def put(self, request):
         params = get_parameters(request)
-
-        user_id = params["id"],
-        nom = params["nom"]
-        prenom = params["prenom"]
-        num_tel = params["num_tel"]
-        password = params["password"]
-        email = params["email"]
-
-        error = check_required_parameters(params, ['id'])
+        error = check_required_parameters(params, ['nom', 'prenom', 'email', 'tel'])
         if error is not None: return error
 
-        user = User.objects.get(id=user_id)
+        nom = params["nom"]
+        prenom = params["prenom"]
+        num_tel = params["tel"]
+        email = params["email"]
+
+
+        user = get_user_from_request(request)
 
         if nom is not None:
             user.nom = nom
@@ -156,8 +154,6 @@ class userAPI(View):
             user.num_tel = num_tel
         if prenom is not None:
             user.prenom = prenom
-        if password is not None:
-            user.password = password
         if email is not None:
             user.email = email
 
@@ -185,6 +181,20 @@ def me(request):
     user = UserSerializer(user)
     return JsonResponse(user.data, safe=False)
 
+def password_change(request):
+    params = get_parameters(request)
+    user = get_user_from_request(request)
+
+    error = check_required_parameters(params, ['passwordCurrent', 'passwordNew'])
+    if error is not None: return error
+    
+    if user.password != params['passwordCurrent']:
+        return HttpResponseBadRequest('Mauvais mot de passe')
+    
+    user.password = params['passwordNew']
+    user.save()
+
+    return JsonResponse({'response': True}, safe=False)
 
 class factureAPI(View):
     def get(self, request):
@@ -260,6 +270,7 @@ def get_factures_entreprise(request: HttpRequest):
 
 
 def connect(request):
+    print(request)
     params = get_parameters(request)
     error = check_required_parameters(params, ["email", "password"])
     if error is not None: return error
@@ -322,13 +333,11 @@ def sign_up(request: HttpRequest):
 
     return JsonResponse({'user': user}, safe=False)
 
-
 def get_GET_parameters(request, parameters, default_value=None) -> dict:
     ret = {}
     for parameter in parameters:
         ret[parameter] = request.GET.get(parameter, default_value)
     return ret
-
 
 def get_parameters(request) -> dict:
     try:
@@ -382,7 +391,6 @@ def entreprise_users(request):
 
     return JsonResponse({'users': users}, safe=False)
 
-
 def transfer_admin(request):
     params = get_parameters(request)
     check_required_parameters(params, "email")
@@ -408,10 +416,8 @@ def transfer_admin(request):
 
     return HttpResponse("transfert d'admin effectué")
 
-
 def is_user_of_entreprise(user, entreprise):
     return user.entreprise.siret == entreprise.siret
-
 
 def decode_token(token):
     try:
@@ -419,11 +425,11 @@ def decode_token(token):
     except:
         return None
 
-
 def entreprise_updated_middleware(get_response):
     target_paths = ["paperless/facture", "paperless/entreprise"]
 
     def middleware(request):
+
         path = request.path
         method = request.method
 
@@ -431,33 +437,34 @@ def entreprise_updated_middleware(get_response):
         try:
             entreprise = get_entreprise_from_request(request)
         except:
-            response = get_response(request)
-            return response
+            return get_response(request)
 
         target_path = False
+
         for target_p in target_paths:
             if target_p in path:
                 target_path = target_p
                 break
-
+    
         should_test = False
 
-        if "paperless/facture" in target_path:
-            if method == "POST" or method == "PUT":
-                should_test = True
-        if "paperless/entreprise" in target_path:
-            if method == "PUT":
-                should_test = True
+        if target_path:
+            if "paperless/facture" in target_path:
+                if method == "POST" or method == "PUT":
+                    should_test = True
+            if "paperless/entreprise" in target_path:
+                if method == "PUT":
+                    should_test = True
 
         if should_test and entreprise.is_updated:
             return HttpResponseBadRequest(
                 "Les informations de l'entreprise ont été mis à jour, vous devez attendre leur vérification")
 
         response = get_response(request)
+
         return response
 
     return middleware
-
 
 def send_to_chorus(request):
     """ envoyer une facture à chorus
@@ -480,7 +487,6 @@ def send_to_chorus(request):
         return HttpResponseBadRequest("Quelque chose s'est mal passé lors de l'envoi de la facture à chorus")
 
     return HttpResponse("facture envoyée avec succès")
-
 
 def receive_from_chorus(request):
     """ Obtenir une facture de chorus
