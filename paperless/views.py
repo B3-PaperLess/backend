@@ -9,6 +9,7 @@ from django.views import View
 import json
 import jwt
 import os
+import bcrypt
 from .models import Facture, User, Entreprise
 
 
@@ -304,15 +305,15 @@ def connect(request):
     password = params["password"]
 
     try:
-        user = User.objects.get(
-            email=email,
-            password=password
-        )
-        serializer = UserSerializer(user)
-        user = serializer.data
-
+        user = User.objects.get(email=email)
     except ObjectDoesNotExist:
         return HttpResponseBadRequest('Email ou mot de passe invalide')
+
+    if not bcrypt.checkpw(password.encode(), user.password.encode()):
+        return HttpResponseBadRequest('Email ou mot de passe invalide')
+
+    serializer = UserSerializer(user)
+    user = serializer.data
 
     token = jwt.encode({"token": email}, os.getenv("TOKEN_KEY"), algorithm="HS256")
     return JsonResponse({'token': token, 'user': user}, safe=False)
@@ -337,6 +338,9 @@ def sign_up(request: HttpRequest):
     ville = params['ville']
     adresse = params['adresse']
 
+    hashed_password = bcrypt.hashpw(password.encode(),bcrypt.gensalt()).decode()
+
+
     entreprise = Entreprise.objects.create(
         siret=siret,
         nom=raison_social,
@@ -349,7 +353,7 @@ def sign_up(request: HttpRequest):
         prenom=prenom,
         email=email,
         num_tel=num_tel,
-        password=password,
+        password=hashed_password,
         is_admin=True,
         entreprise=entreprise
     )
