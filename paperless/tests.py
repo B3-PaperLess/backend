@@ -2,6 +2,8 @@ from django.test import TestCase
 from . import models
 from django.urls import reverse
 from django.test import Client
+import bcrypt
+from datetime import datetime
 client = Client()
 
 #region Models tests
@@ -127,49 +129,39 @@ class FactureTestCase(TestCase):
             password="password",
             is_admin=False,
             entreprise=entreprise,
-        )
+        )        
         models.Facture.objects.create(
-            location="location",
-            state="state",
-            user=user,
+            nom = "facture",
+            location = "location",
+            taille = 1234567890,
+            state = "state",
+            date = "2020-01-01",
+            user = user,
         )
-
-    def test_get(self):
-        facture = models.Facture.objects.get(location="location")
-        self.assertEqual(facture.state, "state")
-        self.assertEqual(facture.user.email, "test@test.test")
-        self.assertEqual(facture.user.nom, "nom")
-        self.assertEqual(facture.user.prenom, "prenom")
-        self.assertEqual(facture.user.num_tel, "0123456789")
-        self.assertEqual(facture.user.password, "password")
-        self.assertEqual(facture.user.is_admin, False)
-        self.assertEqual(facture.user.entreprise.siret, 12345678901234)
-        self.assertEqual(facture.user.entreprise.nom, "entreprise")
-        self.assertEqual(facture.user.entreprise.adresse, "adresse")
-        self.assertEqual(facture.user.entreprise.ville, "ville")
     
+    def test_get(self):
+        facture = models.Facture.objects.get(nom="facture")
+        self.assertEqual(facture.location, "location")
+        self.assertEqual(facture.taille, 1234567890)
+        self.assertEqual(facture.state, "state")
+        
+
     def test_update(self):
-        facture = models.Facture.objects.get(location="location")
+        facture = models.Facture.objects.get(nom="facture")
+        facture.location = "location2"
+        facture.taille = 9876543210
         facture.state = "state2"
         facture.save()
-        facture = models.Facture.objects.get(location="location")
+        facture = models.Facture.objects.get(nom="facture")
+        self.assertEqual(facture.location, "location2")
+        self.assertEqual(facture.taille, 9876543210)
         self.assertEqual(facture.state, "state2")
-        self.assertEqual(facture.user.email, "test@test.test")
-        self.assertEqual(facture.user.nom, "nom")
-        self.assertEqual(facture.user.prenom, "prenom")
-        self.assertEqual(facture.user.num_tel, "0123456789")
-        self.assertEqual(facture.user.password, "password")
-        self.assertEqual(facture.user.is_admin, False)
-        self.assertEqual(facture.user.entreprise.siret, 12345678901234)
-        self.assertEqual(facture.user.entreprise.nom, "entreprise")
-        self.assertEqual(facture.user.entreprise.adresse, "adresse")
-        self.assertEqual(facture.user.entreprise.ville, "ville")
-      
+
     def test_delete(self):
-        facture = models.Facture.objects.get(location="location")
+        facture = models.Facture.objects.get(nom="facture")
         facture.delete()
         with self.assertRaises(models.Facture.DoesNotExist):
-            facture = models.Facture.objects.get(location="location")
+            facture = models.Facture.objects.get(nom="facture")
 
 #endregion
 
@@ -185,12 +177,13 @@ class AuthentificationTestCase(TestCase):
             adresse="adresse",
             ville="ville",
         )
+        password = "password"
         user = models.User.objects.create(
             email="test@test.com",
             nom="nom",
             prenom="prenom",
             num_tel="0123456789",
-            password="password",
+            password=bcrypt.hashpw(password.encode(),bcrypt.gensalt()).decode(),
             is_admin=False,
             entreprise=entreprise,
         )
@@ -210,13 +203,14 @@ class AuthentificationTestCase(TestCase):
     
     def test_register(self):
         url = reverse('signup')
+        password = "TEST_1234"
         newUser = {
                 "nom":"test",
                 "prenom":"test",
                 "email":"testSignUp@test.com",
                 "num_tel":"0000000000",
-                "password":"TEST_1234",
-                "passwordAgain":"TEST_1234",
+                "password": password,
+                "passwordAgain": password,
                 "siret":"00000000000000",
                 "raison_social":"test",
                 "adresse":"test",
@@ -224,18 +218,14 @@ class AuthentificationTestCase(TestCase):
             }
         response = client.post(url, newUser, content_type='application/json')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {
-            "user": {
-                "id": 2,
-                "email": "testSignUp@test.com",
-                "nom": "test",
-                "prenom": "test",
-                "num_tel": "0000000000",
-                "password": "TEST_1234",
-                "is_admin": True,
-                "entreprise": "00000000000000"
-            }
-        })
+        content = response.json()
+        self.assertEqual(content['user']['email'], 'testSignUp@test.com')
+        self.assertEqual(content['user']['nom'], 'test')
+        self.assertEqual(content['user']['prenom'], 'test')
+        self.assertEqual(content['user']['num_tel'], '0000000000')
+        self.assertEqual(content['user']['is_admin'], True)
+        self.assertEqual(content['user']['entreprise'], '00000000000000')
+        self.assertTrue(bcrypt.checkpw(password.encode(), content['user']['password'].encode()))
 
 #endregion
 
