@@ -10,6 +10,7 @@ import json
 import jwt
 import os
 import bcrypt
+import facturx 
 from .models import Facture, User, Entreprise
 
 
@@ -490,7 +491,40 @@ def token_middleware(get_response):
 
 # endregion
 
-# region Chorus
+# region Chorus / PDP
+
+def send_facture(file):
+    try :
+        xml = facturx.get_xml_from_pdf(file)
+    except:
+        return "Une erreur est survenue lors de la récupération du fichier xml"
+
+    """
+    Ici on devrait écrire le code pour voir si l'entreprise est inscrite à chorus ou chez un autre PDP    
+    """
+    
+    # pdp_id = get_pdp_id_from_siret(xml.siret)
+    # if pdp_id is not None:
+    #   ret = send_to_pdp(file, pdp_id)
+    # else:
+    #   ret = send_to_chorus(file)
+    
+    return ret
+
+def send_to_pdp(file, pdp_id):
+    """ envoyer une facture à pdp
+
+    Il s'agit d'un exemple car nous n'avons pas accès la base école
+    """
+
+    # Ici on devrait écrire le code pour faire appel à l'api de pdp
+    r = requests.post("EndpointApiDuPDP", files=file)
+
+    # Et ici gérer les différentes erreurs que nous renvoi pdp
+    if not r.ok:
+        return "Quelque chose s'est mal passé lors de l'envoi de la facture à pdp"
+
+    return True
 
 def send_to_chorus(file):
     """ envoyer une facture à chorus
@@ -620,5 +654,10 @@ def decode_token(token):
         return jwt.decode(token, os.getenv("TOKEN_KEY"), algorithms=["HS256"])["token"]
     except:
         return None
+
+def get_pdp_id_from_siret(siret):
+    """ Obtenir l'id du PDP à partir du siret de l'entreprise
+    """
+    return None
 
 # endregion
